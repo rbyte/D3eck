@@ -2,24 +2,21 @@ function interfaceInit() {
 	d3eck()
 }
 
-var srcT, umdreieck, indreieck
-var draggedCorner = "none"
-var delta = Math.PI/2
-var lastMousePosition = new Vec2(0, 0)
-var mouseDragDeltaEntryPoint = 0
-var leftMouseDown = false
-var clickRadius = 20
-var srcTcornerDefaultColor = "rgba(0,0,0,0.04)"
-
 function d3eck() {
-	console.log("hi console :)")
+	var srcT, umdreieck, indreieck
+	var delta = Math.PI/2
+	var lastMousePosition = new Vec2(0, 0)
+	var mouseDragDeltaEntryPoint = 0
+	var clickRadius = 20
+	var srcTcornerDefaultColor = "rgb(150,150,150)"
+	var isDragged = false
 	
 	var width = document.getElementById("viz").offsetWidth
 	var height = document.getElementById("viz").offsetHeight
 	if (width == 0)
 		width = window.innerWidth-4
 	if (height == 0)
-		height = window.innerHeight-4
+		height = width*0.7
 	if (width <= 50)
 		width = 50
 	if (height <= 50)
@@ -32,148 +29,165 @@ function d3eck() {
 		new Vec2(width*0.47, height*0.6)
 	)
 	
-	umdreieck = srcT.umdreieck(-delta)
-	indreieck = srcT.indreieck(delta, umdreieck)
+	function updateUmAndIn() {
+		umdreieck = srcT.umdreieck(-delta)
+		indreieck = srcT.indreieck(delta, umdreieck)
+		d3.select("#umdreieck").attr("d", umdreieck.toPathString())
+		d3.select("#indreieck").attr("d", indreieck.toPathString())
+	}
 	
-	//The SVG Container
+	function getDelta(v) {
+		var z = srcT.center().sub(v)
+		// this is always between 0 and 180°
+		var angle = new Vec2(1,0).angleBetween(z)
+		return z.y > 0 ? angle : 2*Math.PI-angle
+	}
+	
+	var onSVGDrag = d3.behavior.drag()
+		.on("drag", function() {
+			var mpc = d3.mouse(this)
+			var mousePos = new Vec2(mpc[0], mpc[1])
+			if (!(mousePos.equals(lastMousePosition))) {
+				lastMousePosition = mousePos
+				delta = getDelta(mousePos) + mouseDragDeltaEntryPoint	
+				updateUmAndIn()
+			}
+		})
+		.on("dragstart", function() {
+			isDragged = true
+			var mpc = d3.mouse(this)
+			var mousePos = new Vec2(mpc[0], mpc[1])
+			mouseDragDeltaEntryPoint = delta - getDelta(mousePos)
+
+			d3.select("#srcTcenter")
+				.transition()
+				.duration(200)
+				.attr("fill-opacity", 0.3)
+			d3.selectAll(".srcTcorner")
+				.transition()
+				.duration(200)
+				.attr("fill-opacity", 0)
+		})
+		.on("dragend", function() {
+			isDragged = false
+			d3.select("#srcTcenter")
+				.transition()
+				.duration(200)
+				.attr("fill-opacity", 0)
+		})
+	
+	function cornerMouseOver(elem) {
+		d3.select(elem)
+			.attr("fill", "rgb(255,200,0)")
+	}
+	
+	function cornerMouseOut(elem) {
+		d3.select(elem).attr("fill", srcTcornerDefaultColor)
+	}
+	
+	var onCornerDrag = d3.behavior.drag()
+		.on("drag", function() {
+			var mpc = d3.mouse(this)
+			var mousePos = new Vec2(mpc[0], mpc[1])
+//			var mousePos = new Vec2(d3.event.x, d3.event.y)
+			srcT.set(d3.select(this).attr("abc"), mousePos)
+			d3.select(this).attr("cx", mousePos.x).attr("cy", mousePos.y)
+			d3.select("#srcTcenter").attr("cx", srcT.center().x).attr("cy", srcT.center().y)
+			d3.select("#srcT").attr("d", srcT.toPathString())
+			updateUmAndIn()
+		})
+		.on("dragstart", function() {
+			this.isDragged = true
+			cornerMouseOver(this)
+		})
+		.on("dragend", function() {
+			this.isDragged = false
+			cornerMouseOut(this)
+		})
+	
 	var svg = d3.select("#viz")
 		.append("svg")
 		.attr("id", "d3svg")
 		.attr("width", width)
 		.attr("height", height)
-		.on("mousemove", mousemove)
-		.on("mousedown", mousedown)
-		.on("mouseup", mouseup)
+		.on("mousemove", function() {
+			if (!isDragged)
+				d3.selectAll(".srcTcorner")
+					.transition()
+					.duration(100)
+					.attr("fill-opacity", 0.2)
+					.transition()
+					.delay(1000)
+					.duration(500)
+					.attr("fill-opacity", 0)
+		})
 	
 	svg
 		.append("rect")
-		.attr("x", 0.5)
-		.attr("y", 0.5)
-		.attr("width", width-1)
-		.attr("height", height-1)
-		.attr("fill", "rgba(0,0,0,0)")
-		.attr("stroke", "rgba(0,0,0,0.2)")
-		.attr("stroke-width", 1)
+		.attr("x", 0)
+		.attr("y", 0)
+		.attr("width", "100%")
+		.attr("height", "100%")
+		.attr("fill-opacity", "0")
+		.call(onSVGDrag)
 	
 	svg
 		.append("path")
 		.attr("id", "umdreieck")
-		.attr("d", umdreieck.toPathString())
-		.attr("fill", "rgba(240,240,240,1)")
+		.attr("fill", "rgb(240,240,240)")
 	
 	svg
 		.append("path")
 		.attr("id", "srcT")
 		.attr("d", srcT.toPathString())
-		.attr("fill", "rgba(255,255,255,1)")
+		.attr("fill", "rgb(255,255,255)")
 	
 	svg
 		.append("path")
 		.attr("id", "indreieck")
-		.attr("d", indreieck.toPathString())
-		.attr("fill", "rgba(220,220,220,1)")
+		.attr("fill", "rgb(220,220,220)")
 	
 	svg
 		.selectAll("path")
 		.attr("stroke", "black")
 		.attr("stroke-width", 1)
+		.call(onSVGDrag)
+	
+	updateUmAndIn()
 	
 	svg
 		.selectAll("circle")
 		.data(srcT.getEdgeCoordsArray())
 		.enter()
 		.append("circle")
-		.style("fill", srcTcornerDefaultColor)
+		.attr("fill", srcTcornerDefaultColor)
+		.attr("fill-opacity", 0)
 		.attr("r", clickRadius)
 		.attr("class", "srcTcorner" )
+		.attr("abc", function(d, i) { return d.name })
 		.attr("id", function(d, i) { return "srcTcorner_"+d.name })
 		.attr("cx", function(d, i) { return d.val.x })
 		.attr("cy", function(d, i) { return d.val.y })
 		.on("mouseover", function() {
-			if (!leftMouseDown)
-				d3.select(this)
-					.style("fill", "rgba(255,200,0,0.4)")
+			if (!this.isDragged)
+				cornerMouseOver(this)
 		})
 		.on("mouseout", function() {
-			if (!leftMouseDown)
-				d3.select(this)
-					.style("fill", srcTcornerDefaultColor)
+			if (!this.isDragged)
+				cornerMouseOut(this)
 		})
+		.call(onCornerDrag)
 		
 	svg
 		.append("circle")
-		.style("fill", "rgba(0,0,0,0.3)")
+		.attr("fill", "rgb(0,0,0)")
+		.attr("fill-opacity", 0)
 		.attr("r", 2)
 		.attr("id", "srcTcenter")
 		.attr("cx", srcT.center().x)
 		.attr("cy", srcT.center().y)
-		
-	
-	function mouseup(d, i) {
-		if (d3.event.buttons === 1) {
-			leftMouseDown = false
-			if (draggedCorner === "none")
-				d3.selectAll(".srcTcorner") // for the transition to work, the initial state need to be not "transparent
-					.style("fill", "rgba(0,0,0,0.01)")
-					.transition()
-					.duration(200)
-					.style("fill", srcTcornerDefaultColor)
-			draggedCorner = "none"
-		}
-	}
-	
-	function mousemove(d, i) {
-		var mpc = d3.mouse(this)
-		var mousePos = new Vec2(mpc[0], mpc[1])
-		if (!(mousePos.equals(lastMousePosition))) {
-			lastMousePosition = mousePos
-			if (leftMouseDown) {
-				if (draggedCorner === "none") {
-					delta = getDelta(mousePos) + mouseDragDeltaEntryPoint	
-				} else {
-					srcT.set(draggedCorner, mousePos)
-					d3.select("#srcTcorner_"+draggedCorner).attr("cx", mousePos.x).attr("cy", mousePos.y)
-					d3.select("#srcTcenter").attr("cx", srcT.center().x).attr("cy", srcT.center().y)
-					d3.select("#srcT").attr("d", srcT.toPathString())
-				}
-				
-				umdreieck = srcT.umdreieck(-delta)
-				indreieck = srcT.indreieck(delta, umdreieck)
-				d3.select("#umdreieck").attr("d", umdreieck.toPathString())
-				d3.select("#indreieck").attr("d", indreieck.toPathString())
-			}
-		}
-	}
-	
-	function mousedown(d, i) {
-		if (d3.event.buttons === 1) {
-			leftMouseDown = true
-			var mpc = d3.mouse(this)
-			var mousePos = new Vec2(mpc[0], mpc[1])
-			if (mousePos.sub(srcT.a()).length() < clickRadius)
-				draggedCorner = "a"
-			else if (mousePos.sub(srcT.b()).length() < clickRadius)
-				draggedCorner = "b"
-			else if (mousePos.sub(srcT.c()).length() < clickRadius)
-				draggedCorner = "c"
-			else
-				mouseDragDeltaEntryPoint = delta - getDelta(mousePos)
-			
-			if (draggedCorner === "none")
-				d3.selectAll(".srcTcorner")
-					.transition()
-					.duration(200)
-					.style("fill", "rgba(0,0,0,0)")
-		}
-	}
 }
 
-function getDelta(v) {
-	var z = srcT.center().sub(v)
-	// this is always between 0 and 180°
-	var angle = new Vec2(1,0).angleBetween(z)
-	return z.y > 0 ? angle : 2*Math.PI-angle
-}
 
 function Triangle(a_,b_,c_) {
 	var self = this
